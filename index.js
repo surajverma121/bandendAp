@@ -339,6 +339,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+app.use(express.static('public'));
 
 app.get('/', (req, res) => {
   res.send('Welcome to the API!');
