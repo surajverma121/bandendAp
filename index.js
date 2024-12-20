@@ -339,6 +339,11 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+
+app.get('/', (req, res) => {
+  res.send('Welcome to the API!');
+});
+
 // Configure CORS
 app.use(cors());
 app.use(express.json());
@@ -578,3 +583,4 @@ app.post('/status', async (req, res) => {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
