@@ -314,36 +314,17 @@
 
 
 
+
 const express = require('express');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
-const path = require('path');
 const cors = require('cors');
 const axios = require('axios');
-const http = require('http'); // Import the http module
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
 const app = express();
-const port = 5001;
-
-// Create an HTTP server
-const server = http.createServer(app);
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
-app.use(express.static('public'));
-
-app.get('/', (req, res) => {
-  res.send('Welcome to the API!');
-});
 
 // Configure CORS
 app.use(cors());
@@ -355,12 +336,16 @@ const upload = multer({ storage });
 
 let pendingRequests = {};
 
+// Define a root route to test
+app.get('/', (req, res) => {
+  res.send('Welcome to the API!');
+});
+
 // API endpoint to handle form submissions
 app.post('/send-email/front', (req, res) => {
   const { name, mobile, email, formType } = req.body;
   console.log("name", name, "email", email, "formtype", formType);
 
-  // Email options
   const mailOptions = {
     from: email,
     to: 'blackgrapes.arpinjain@gmail.com', // Replace with your recipient email
@@ -368,7 +353,14 @@ app.post('/send-email/front', (req, res) => {
     text: `Form Type: ${formType}\nName: ${name}\nMobile: ${mobile}\nEmail: ${email}`
   };
 
-  // Send email
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+
   transporter.sendMail(mailOptions, (error, info) => {
     if (error) {
       return res.status(500).send('Error sending email');
@@ -417,24 +409,24 @@ app.post('/send-email', upload.fields([
     to: 'blackgrapes.arpinjain@gmail.com', // Replace with your recipient email
     subject: 'Registration Form Submission',
     html: `
-    <p>
-      Full Name: ${fullName}<br>
-      Father's Name: ${fatherName}<br>
-      Gender: ${gender}<br>
-      Batch: ${batch}<br>
-      Stream: ${stream}<br>
-      College Name: ${collegeName}<br>
-      Address: ${address}<br>
-      WhatsApp Number: ${whatsappNumber}<br>
-      Email: ${email}<br>
-      Payment Mode: ${paymentMode}<br>
-      Amount: ${amount}
-    </p>
-    <p>
-      <strong>give confirmation of demat acocunt:</strong><br>
-      <a href="${yesLink}">Yes</a> | <a href="${noLink}">No</a>
-    </p>
-  `,
+      <p>
+        Full Name: ${fullName}<br>
+        Father's Name: ${fatherName}<br>
+        Gender: ${gender}<br>
+        Batch: ${batch}<br>
+        Stream: ${stream}<br>
+        College Name: ${collegeName}<br>
+        Address: ${address}<br>
+        WhatsApp Number: ${whatsappNumber}<br>
+        Email: ${email}<br>
+        Payment Mode: ${paymentMode}<br>
+        Amount: ${amount}
+      </p>
+      <p>
+        <strong>Give confirmation of demat account:</strong><br>
+        <a href="${yesLink}">Yes</a> | <a href="${noLink}">No</a>
+      </p>
+    `,
     attachments,
   };
 
@@ -447,6 +439,7 @@ app.post('/send-email', upload.fields([
   });
 });
 
+// Response Route for confirmation
 app.get('/response/:requestId', (req, res) => {
   const { requestId } = req.params;
   const { action } = req.query;
@@ -459,34 +452,29 @@ app.get('/response/:requestId', (req, res) => {
   const { fullName, email, amount } = pendingRequests[requestId];
   delete pendingRequests[requestId]; // Remove request from storage
 
-  // Send follow-up email to the user if approved
   if (action === 'yes') {
-    // Send an email to the user confirming the approval
     const mailOptions = {
       from: process.env.EMAIL_USER, // Your email address
       to: email, // User's email address
       subject: 'Your Demat Account is Approved',
       html: `
-    <p>Dear ${fullName},</p>
-    <p>Your Demat account has been approved. You can now proceed with the payment by clicking the link below:</p>
-    <p><a href="http://localhost:3000/checkout" target="_blank" style="color: #007bff; text-decoration: none;">Click here to proceed to payment</a></p>
-    <p>If you have any questions, feel free to contact us.</p>
-    <p>Thank you for choosing us!</p>
+        <p>Dear ${fullName},</p>
+        <p>Your Demat account has been approved. You can now proceed with the payment by clicking the link below:</p>
+        <p><a href="http://localhost:3000/checkout" target="_blank" style="color: #007bff; text-decoration: none;">Click here to proceed to payment</a></p>
+        <p>If you have any questions, feel free to contact us.</p>
+        <p>Thank you for choosing us!</p>
       `,
     };
 
-    // Send the email to the user
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
         console.error('Error sending email:', error); // Log the error
         return res.status(500).send('Error sending email to user');
       }
 
-      // Respond with success status and notify the admin
       res.json({ success: true, action: 'approved', message: 'Email sent to user' });
     });
   } else if (action === 'no') {
-    // If the action is 'no', send rejection to the admin or handle accordingly
     res.json({ success: false, action: 'rejected' });
   } else {
     return res.status(400).send('Invalid action');
@@ -496,7 +484,6 @@ app.get('/response/:requestId', (req, res) => {
 // Payment Gateway Configuration
 const MERCHANT_KEY = "48b460bd-1463-497b-a621-8f9f73e193cd";
 const MERCHANT_ID = "M22MU4WHSIF5F";
-
 const prod_URL = "https://api.phonepe.com/apis/hermes/pg/v1/pay";
 const prod_status_URL = "https://api.phonepe.com/apis/hermes/pg/v1/status";
 
@@ -509,7 +496,6 @@ app.post('/create-order', async (req, res) => {
   const { name, mobileNumber, amount } = req.body;
   const orderId = uuidv4();
 
-  // Payment Payload
   const paymentPayload = {
     merchantId: MERCHANT_ID,
     merchantUserId: name,
@@ -544,10 +530,8 @@ app.post('/create-order', async (req, res) => {
 
   try {
     const response = await axios.request(option);
-    console.log(response.data.data.instrumentResponse.redirectInfo.url);
     res.status(200).json({ msg: "OK", url: response.data.data.instrumentResponse.redirectInfo.url });
   } catch (error) {
-    console.log("Error in payment", error);
     res.status(500).json({ error: 'Failed to initiate payment' });
   }
 });
@@ -581,7 +565,5 @@ app.post('/status', async (req, res) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
-
+// Export the app for Vercel serverless deployment
+module.exports = app;
