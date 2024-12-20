@@ -313,7 +313,6 @@
 // suraj 
 
 
-
 const express = require('express');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
@@ -324,178 +323,145 @@ const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
 const app = express();
-const port = process.env.PORT || 8000;
+const port = 8000;
 
-// Middleware
+// Configure CORS
 app.use(cors());
 app.use(express.json());
 
-// Multer setup for file uploads
+// Configure Multer for file uploads
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Store pending requests
 let pendingRequests = {};
 
-// Default route
+// Root route
 app.get('/', (req, res) => {
   res.send('Welcome to the API!');
 });
 
-// Nodemailer transporter configuration
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
-// Route: Send email with form data
+// Frontend email endpoint
 app.post('/send-email/front', (req, res) => {
   const { name, mobile, email, formType } = req.body;
 
   const mailOptions = {
     from: email,
-    to: 'blackgrapes.arpinjain@gmail.com',
+    to: 'blackgrapes.arpinjain@gmail.com', // Replace with your email
     subject: 'New Meeting Registration',
     text: `Form Type: ${formType}\nName: ${name}\nMobile: ${mobile}\nEmail: ${email}`,
   };
 
-  transporter.sendMail(mailOptions, (error, info) => {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+
+  transporter.sendMail(mailOptions, (error) => {
     if (error) {
-      console.error('Error sending email:', error);
-      res.status(500).send('Error sending email');
+      return res.status(500).send('Error sending email');
     } else {
       res.status(200).send('Email sent successfully');
     }
   });
 });
 
-// Route: Handle file uploads and send detailed email
-app.post(
-  '/send-email',
-  upload.fields([
-    { name: 'aadharCard', maxCount: 1 },
-    { name: 'panCard', maxCount: 1 },
-    { name: 'graduationMarksheet', maxCount: 1 },
-    { name: 'passportSizePhoto', maxCount: 1 },
-    { name: 'updatedResume', maxCount: 1 },
-  ]),
-  (req, res) => {
-    const {
-      fullName,
-      fatherName,
-      gender,
-      batch,
-      stream,
-      collegeName,
-      address,
-      whatsappNumber,
-      email,
-      paymentMode,
-      amount,
-    } = req.body;
+// Form submission with attachments
+app.post('/send-email', upload.fields([
+  { name: 'aadharCard', maxCount: 1 },
+  { name: 'panCard', maxCount: 1 },
+  { name: 'graduationMarksheet', maxCount: 1 },
+  { name: 'passportSizePhoto', maxCount: 1 },
+  { name: 'updatedResume', maxCount: 1 },
+]), (req, res) => {
+  const { fullName, fatherName, gender, batch, stream, collegeName, address, whatsappNumber, email, paymentMode, amount } = req.body;
 
-    const requestId = uuidv4();
-    pendingRequests[requestId] = { fullName, email };
+  const mailOptions = {
+    from: email,
+    to: 'blackgrapes.arpinjain@gmail.com', // Replace with your email
+    subject: 'Registration Form Submission',
+    html: `
+      <p>Full Name: ${fullName}<br>Father's Name: ${fatherName}<br>Gender: ${gender}<br>Batch: ${batch}<br>Stream: ${stream}<br>
+      College Name: ${collegeName}<br>Address: ${address}<br>WhatsApp Number: ${whatsappNumber}<br>Email: ${email}<br>
+      Payment Mode: ${paymentMode}<br>Amount: ${amount}</p>`,
+  };
 
-    const attachments = [
-      req.files?.aadharCard?.[0]
-        ? { filename: req.files.aadharCard[0].originalname, content: req.files.aadharCard[0].buffer }
-        : null,
-      req.files?.panCard?.[0]
-        ? { filename: req.files.panCard[0].originalname, content: req.files.panCard[0].buffer }
-        : null,
-      req.files?.graduationMarksheet?.[0]
-        ? { filename: req.files.graduationMarksheet[0].originalname, content: req.files.graduationMarksheet[0].buffer }
-        : null,
-      req.files?.passportSizePhoto?.[0]
-        ? { filename: req.files.passportSizePhoto[0].originalname, content: req.files.passportSizePhoto[0].buffer }
-        : null,
-      req.files?.updatedResume?.[0]
-        ? { filename: req.files.updatedResume[0].originalname, content: req.files.updatedResume[0].buffer }
-        : null,
-    ].filter(Boolean);
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
 
-    const mailOptions = {
-      from: email,
-      to: 'blackgrapes.arpinjain@gmail.com',
-      subject: 'Registration Form Submission',
-      html: `
-        <p>Full Name: ${fullName}<br>Father's Name: ${fatherName}<br>Gender: ${gender}<br>Batch: ${batch}<br>
-        Stream: ${stream}<br>College Name: ${collegeName}<br>Address: ${address}<br>
-        WhatsApp Number: ${whatsappNumber}<br>Email: ${email}<br>
-        Payment Mode: ${paymentMode}<br>Amount: ${amount}</p>`,
-      attachments,
-    };
+  transporter.sendMail(mailOptions, (error) => {
+    if (error) {
+      console.error('Error sending email:', error);
+      return res.status(500).send('Error sending email');
+    }
+    res.status(200).send('Email sent successfully');
+  });
+});
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error('Error sending email:', error);
-        return res.status(500).send('Error sending email');
-      }
-      res.status(200).send('Email sent successfully');
-    });
-  }
-);
+// Payment Gateway Setup
+const MERCHANT_KEY = process.env.MERCHANT_KEY;
+const MERCHANT_ID = process.env.MERCHANT_ID;
+const PAYMENT_URL = process.env.PAYMENT_URL;
+const PAYMENT_STATUS_URL = process.env.PAYMENT_STATUS_URL;
+const SUCCESS_URL = process.env.SUCCESS_URL;
+const FAILURE_URL = process.env.FAILURE_URL;
 
-// Route: Create payment order
+// Create Order Route
 app.post('/create-order', async (req, res) => {
   const { name, mobileNumber, amount } = req.body;
   const orderId = uuidv4();
 
-  const payload = Buffer.from(
-    JSON.stringify({
-      merchantId: process.env.MERCHANT_ID,
-      merchantUserId: name,
-      mobileNumber,
-      amount: amount * 100,
-      merchantTransactionId: orderId,
-      redirectUrl: `http://localhost:${port}/status?id=${orderId}`,
-      redirectMode: 'POST',
-      paymentInstrument: { type: 'PAY_PAGE' },
-    })
-  ).toString('base64');
+  const paymentPayload = {
+    merchantId: MERCHANT_ID,
+    merchantUserId: name,
+    mobileNumber: mobileNumber,
+    amount: amount * 100,
+    merchantTransactionId: orderId,
+    redirectUrl: `http://localhost:8000/status?id=${orderId}`,
+    redirectMode: 'POST',
+    paymentInstrument: { type: 'PAY_PAGE' },
+  };
 
-  const checksum = crypto
-    .createHash('sha256')
-    .update(payload + '/pg/v1/pay' + process.env.MERCHANT_KEY)
-    .digest('hex');
+  const payload = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
+  const keyIndex = 1;
+  const string = payload + '/pg/v1/pay' + MERCHANT_KEY;
+  const sha256 = crypto.createHash('sha256').update(string).digest('hex');
+  const checksum = sha256 + '###' + keyIndex;
 
   try {
-    const response = await axios.post(process.env.PAYMENT_URL, { request: payload }, {
-      headers: { 'X-VERIFY': `${checksum}###1` },
+    const response = await axios.post(PAYMENT_URL, { request: payload }, {
+      headers: { 'Content-Type': 'application/json', 'X-VERIFY': checksum },
     });
     res.status(200).json({ url: response.data.data.instrumentResponse.redirectInfo.url });
   } catch (error) {
-    console.error('Payment initiation error:', error);
-    res.status(500).send('Failed to initiate payment');
+    console.error('Error creating order:', error);
+    res.status(500).send('Error creating order');
   }
 });
 
-// Route: Payment status
+// Payment Status Route
 app.post('/status', async (req, res) => {
-  const { id: merchantTransactionId } = req.query;
-
-  const checksum = crypto
-    .createHash('sha256')
-    .update(`/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}` + process.env.MERCHANT_KEY)
-    .digest('hex');
+  const merchantTransactionId = req.query.id;
+  const keyIndex = 1;
+  const string = `/pg/v1/status/${MERCHANT_ID}/${merchantTransactionId}` + MERCHANT_KEY;
+  const sha256 = crypto.createHash('sha256').update(string).digest('hex');
+  const checksum = sha256 + '###' + keyIndex;
 
   try {
-    const response = await axios.get(`${process.env.PAYMENT_STATUS_URL}/${process.env.MERCHANT_ID}/${merchantTransactionId}`, {
-      headers: { 'X-VERIFY': `${checksum}###1` },
+    const response = await axios.get(`${PAYMENT_STATUS_URL}/${MERCHANT_ID}/${merchantTransactionId}`, {
+      headers: { 'X-VERIFY': checksum, 'X-MERCHANT-ID': MERCHANT_ID },
     });
-
-    if (response.data.success) {
-      res.redirect(process.env.SUCCESS_URL);
-    } else {
-      res.redirect(process.env.FAILURE_URL);
-    }
+    res.redirect(response.data.success ? SUCCESS_URL : FAILURE_URL);
   } catch (error) {
-    console.error('Payment status error:', error);
-    res.status(500).send('Failed to retrieve payment status');
+    console.error('Error checking payment status:', error);
+    res.redirect(FAILURE_URL);
   }
 });
 
@@ -503,3 +469,4 @@ app.post('/status', async (req, res) => {
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
+
